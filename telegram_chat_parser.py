@@ -18,6 +18,8 @@ Have fun! I hope this little program helps you! (:
 import csv
 import json
 import argparse
+import os
+import shutil
 
 from datetime import datetime
 
@@ -193,17 +195,19 @@ class TelegramChatParser:
             jdata: a dictionary in the structure of a 'Chat' object.
         """
         
-        chat = jdata["name"]
-        
+        chat = jdata.get("name") or jdata.get("type") or "Unknown"
+        chat_id = jdata.get("id", "")
+
         rows = []
         for message in jdata["messages"]:
             row = self.process_message(message)
             if row is not None:
                 rows.append(row)
-        
+
         dump = {
-            "chat" : chat,
-            "rows" : rows,
+            "chat"    : chat,
+            "chat_id" : chat_id,
+            "rows"    : rows,
         }
         
         debug(f"{chat} parsed ok!")
@@ -239,12 +243,25 @@ class TelegramChatParser:
             include_timestamp: if True, puts a timestamp in the filename.
         """
         
+        output_dir = "chats_csv"
+        if os.path.exists(output_dir):
+            answer = input(f"Folder '{output_dir}' already exists. Delete it and continue? [y/N] ").strip().lower()
+            if answer != "y":
+                print("Aborted.")
+                return
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir)
+
         for dump in data:
-            output_filepath = f"{dump['chat']}.csv"
-            
+            safe_name = dump['chat'].replace("/", "-")
+            chat_id = dump['chat_id']
+            output_filepath = f"{safe_name}_{chat_id}.csv" if chat_id else f"{safe_name}.csv"
+
             if include_timestamp:
                 output_filepath = f"{timestamp()}_{output_filepath}"
-            
+
+            output_filepath = os.path.join(output_dir, output_filepath)
+
             with open(output_filepath, "w", encoding="utf-8-sig", newline="") as output_file:
                 writer = csv.DictWriter(output_file, self.columns, dialect="unix", quoting=csv.QUOTE_NONNUMERIC)
                 writer.writeheader()
